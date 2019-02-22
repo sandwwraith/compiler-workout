@@ -30,7 +30,7 @@ let rec eval cfg prog = List.fold_left eval1 cfg prog
   and eval1 cfg cmd = let (stack, (state, input, output)) = cfg in match cmd with 
     | BINOP op -> (
       match stack with 
-        | op1::op2::tail -> let result = Expr.eval Expr.empty (Binop (op, (Const op2), (Const op1))) in 
+        | op1::op2::tail -> let result = Expr.makeBinOp op op2 op1 in 
           (result::tail, (state, input, output))
         | _ -> failwith "Not enough operands on stack"
     )
