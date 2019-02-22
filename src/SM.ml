@@ -37,18 +37,18 @@ let rec eval cfg prog = List.fold_left eval1 cfg prog
     | CONST i -> (i::stack, (state, input, output))
     | READ -> (
       match input with
-      | x::tail -> (x::stack, (state, input, output))
+      | head::tail -> (head::stack, (state, tail, output))
       | _ -> failwith "Not enough input to consume"   
     )
     | WRITE -> (
       match stack with
-        | h::tail -> (tail, (state, input, output@[h]))
+        | head::tail -> (tail, (state, input, output@[head]))
         | _ -> failwith "Not enough operands on stack"
     ) 
     | LD name -> let var = state name in (var::stack, (state, input, output))
     | ST name -> (
       match stack with
-        | h::tail -> (tail, (Expr.update name h state, input, output))
+        | head::tail -> (tail, (Expr.update name head state, input, output))
         | _ -> failwith "Not enough operands on stack"
     )
 
