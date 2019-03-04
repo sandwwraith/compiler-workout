@@ -14,10 +14,10 @@ module Expr =
     (* The type for expressions. Note, in regular OCaml there is no "@type..."
        notation, it came from GT.
     *)
-    type t =
+    @type t =
     (* integer constant *) | Const of int
     (* variable         *) | Var   of string
-    (* binary operator  *) | Binop of string * t * t
+    (* binary operator  *) | Binop of string * t * t with show
 
     (* Available binary operators:
         !!                   --- disjunction
@@ -71,13 +71,6 @@ module Expr =
       | Binop (op, arg1, arg2) -> makeBinOp op (eval state arg1) (eval state arg2)
     ;;
 
-    (* let ostap x = x
-    let _ = Array.map (fun (assoc, ops) -> (assoc, List.map (fun op -> (ostap - $(op), fun a b -> Binop (op, a, b))) ops))
-          [|                                               (* --- an array of binary operator specifiers, ordered by the priority in increasing order              *)
-            `Lefta , ["+"]; (*     --- each specifier describes the associativity at given priority (one of `Lefta, `Righta, `Nona) *)
-            `Righta, ["*"]; (*     --- and the list of pairs:                                                                       *)
-          |] *)
-
     (* Expression parser. You can use the following terminals:
 
          IDENT   --- a non-empty identifier a-zA-Z[a-zA-Z0-9_]* as a string
@@ -111,11 +104,11 @@ module Stmt =
   struct
 
     (* The type for statements *)
-    type t =
+    @type t =
     (* read into the variable           *) | Read   of string
     (* write the value of an expression *) | Write  of Expr.t
     (* assignment                       *) | Assign of string * Expr.t
-    (* composition                      *) | Seq    of t * t
+    (* composition                      *) | Seq    of t * t with show
 
     (* The type of configuration: a state, an input stream, an output stream *)
     type config = Expr.state * int list * int list
