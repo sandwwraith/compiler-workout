@@ -3,20 +3,20 @@
 (* The registers: *)
 let regs = [|"%ebx"; "%ecx"; "%esi"; "%edi"; "%eax"; "%edx"; "%ebp"; "%esp"|]
 
-(* We can not freely operate with all register; only 3 by now *)                    
+(* We can not freely operate with all register; only 3 by now *)
 let num_of_regs = Array.length regs - 5
 
 (* We need to know the word size to calculate offsets correctly *)
 let word_size = 4
 
 (* We need to distinguish the following operand types: *)
-type opnd = 
+type opnd =
 | R of int     (* hard register                    *)
 | S of int     (* a position on the hardware stack *)
 | M of string  (* a named memory location          *)
 | L of int     (* an immediate operand             *)
 
-(* For convenience we define the following synonyms for the registers: *)         
+(* For convenience we define the following synonyms for the registers: *)
 let ebx = R 0
 let ecx = R 1
 let esi = R 2
@@ -34,7 +34,7 @@ type instr =
 (* x86 integer division, see instruction set reference  *) | IDiv  of opnd
 (* see instruction set reference                        *) | Cltd
 (* sets a value from flags; the first operand is the    *) | Set   of string * string
-(* suffix, which determines the value being set, the    *)                     
+(* suffix, which determines the value being set, the    *)
 (* the second --- (sub)register name                    *)
 (* pushes the operand on the hardware stack             *) | Push  of opnd
 (* pops from the hardware stack to the operand          *) | Pop   of opnd
@@ -48,7 +48,7 @@ let show instr =
   | "-"   -> "subl"
   | "*"   -> "imull"
   | "&&"  -> "andl"
-  | "!!"  -> "orl" 
+  | "!!"  -> "orl"
   | "^"   -> "xorl"
   | "cmp" -> "cmpl"
   | _     -> failwith "unknown binary operator"
@@ -80,9 +80,31 @@ open SM
    Take an environment, a stack machine program, and returns a pair --- the updated environment and the list
    of x86 instructions
 *)
-let compile _ _ = failwith "Not yet implemented"
+let rec compile env program = List.fold_left compile1 (env, []) program
+  and compile1 (env, prg) ins =
+  let ref_global e x = M ((e#global x)#loc x) in
+  let newenv, newprg = match ins with
+    | CONST n ->
+      let loc, env = env#allocate in
+      env, [Mov (L n, loc)]
+    | WRITE ->
+      let loc, env = env#pop in
+      env, [Push loc; Call "Lwrite"; Pop eax]
+    | READ ->
+      let loc, env = env#allocate in
+      env, [Call "Lread"; Mov(eax, loc)]
+    | LD x ->
+      let ref = ref_global env x in
+      let loc, env = env#allocate in
+      env, [Mov (ref, loc)]
+    | ST x ->
+      let ref = ref_global env x in
+      let loc, env = env#pop in
+      env, [Mov (loc, ref)]
+    | BINOP op -> failwith "TODO"
+  in (newenv, prg @ newprg)
 
-(* A set of strings *)           
+(* A set of strings *)
 module S = Set.Make (String)
 
 (* Environment implementation *)
@@ -93,20 +115,20 @@ class env =
     val stack       = []       (* symbolic stack                    *)
 
     (* gets a name for a global variable *)
-    method loc x = "global_" ^ x                                 
+    method loc x = "global_" ^ x
 
     (* allocates a fresh position on a symbolic stack *)
-    method allocate =    
+    method allocate =
       let x, n =
-	let rec allocate' = function
-	| []                            -> ebx     , 0
-	| (S n)::_                      -> S (n+1) , n+1
-	| (R n)::_ when n < num_of_regs -> R (n+1) , stack_slots
-	| _                             -> S 0     , 1
-	in
-	allocate' stack
-      in
-      x, {< stack_slots = max n stack_slots; stack = x::stack >}
+        let rec allocate' = function
+        | []                            -> ebx     , 0
+        | (S n)::_                      -> S (n+1) , n+1
+        | (R n)::_ when n < num_of_regs -> R (n+1) , stack_slots
+        | _                             -> S 0     , 1
+        in
+        allocate' stack
+            in
+            x, {< stack_slots = max n stack_slots; stack = x::stack >}
 
     (* pushes an operand to the symbolic stack *)
     method push y = {< stack = y::stack >}
@@ -123,17 +145,17 @@ class env =
     (* gets the number of allocated stack slots *)
     method allocated = stack_slots
 
-    (* gets all global variables *)      
+    (* gets all global variables *)
     method globals = S.elements globals
   end
 
 (* compiles a unit: generates x86 machine code for the stack program and surrounds it
    with function prologue/epilogue
 *)
-let compile_unit env scode =  
+let compile_unit env scode =
   let env, code = compile env scode in
-  env, 
-  ([Push ebp; Mov (esp, ebp); Binop ("-", L (word_size*env#allocated), esp)] @ 
+  env,
+  ([Push ebp; Mov (esp, ebp); Binop ("-", L (word_size*env#allocated), esp)] @
    code @
    [Mov (ebp, esp); Pop ebp; Binop ("^", eax, eax); Ret]
   )
@@ -164,5 +186,4 @@ let build stmt name =
   Printf.fprintf outf "%s" (genasm stmt);
   close_out outf;
   let inc = try Sys.getenv "RC_RUNTIME" with _ -> "../runtime" in
-  Sys.command (Printf.sprintf "gcc -m32 -o %s %s/runtime.o %s.s" name inc name)
- 
+  Sys.command (Printf.sprintf "gcc -m32 -Wl,-no_pie -o %s %s/runtime.o %s.s" name inc name)
