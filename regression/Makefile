@@ -13,6 +13,5 @@ $(TESTS): %: %.expr
 
 clean:
 	find . -maxdepth 1 -name "*.log" -delete
-	@rm -f test*.log *.s *~ $(TESTS)
 	pushd expressions && make clean
 	pushd deep-expressions && make clean

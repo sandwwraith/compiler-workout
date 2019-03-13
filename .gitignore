@@ -11,6 +11,7 @@
 *.opt
 *.byte
 *.native
+*.s
 src/.depend
 regression/*.log
 regression/deep-expressions/*.log
