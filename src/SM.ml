@@ -28,7 +28,31 @@ type config = int list * Stmt.config
    Takes an environment, a configuration and a program, and returns a configuration as a result. The
    environment is used to locate a label to jump to (via method env#labeled <label_name>)
 *)                         
-let rec eval env conf prog = failwith "Not yet implemented"
+let rec eval env cfg prog = List.fold_left eval1 cfg prog
+  and eval1 cfg cmd = let (stack, (state, input, output)) = cfg in match cmd with
+    | BINOP op -> (
+      match stack with
+        | op1::op2::tail -> let result = Expr.makeBinOp op op2 op1 in
+          (result::tail, (state, input, output))
+        | _ -> failwith "Not enough operands on stack"
+    )
+    | CONST i -> (i::stack, (state, input, output))
+    | READ -> (
+      match input with
+      | head::tail -> (head::stack, (state, tail, output))
+      | _ -> failwith "Not enough input to consume"
+    )
+    | WRITE -> (
+      match stack with
+        | head::tail -> (tail, (state, input, output@[head]))
+        | _ -> failwith "Not enough operands on stack"
+    )
+    | LD name -> let var = state name in (var::stack, (state, input, output))
+    | ST name -> (
+      match stack with
+        | head::tail -> (tail, (Expr.update name head state, input, output))
+        | _ -> failwith "Not enough operands on stack"
+    )
 
 (* Top-level evaluation
 
@@ -46,6 +70,9 @@ let run p i =
   let m = make_map M.empty p in
   let (_, (_, _, o)) = eval (object method labeled l = M.find l m end) ([], (Expr.empty, i, [])) p in o
 
+open Expr
+open Stmt
+
 (* Stack machine compiler
 
      val compile : Language.Stmt.t -> prg
@@ -53,4 +80,12 @@ let run p i =
    Takes a program in the source language and returns an equivalent program for the
    stack machine
 *)
-let compile p = failwith "Not yet implemented"
+let rec compile stmt = match stmt with
+  | Read name -> [READ; ST name]
+  | Write expr -> (compile_expr expr)@[WRITE]
+  | Assign (x, expr) -> (compile_expr expr)@[ST x]
+  | Seq (t1, t2) -> (compile t1)@(compile t2)
+  and compile_expr expr = match expr with
+    | Expr.Const n -> [CONST n]
+    | Expr.Var x -> [LD x]
+    | Expr.Binop (op, arg1, arg2) -> (compile_expr arg1)@(compile_expr arg2)@[BINOP op]

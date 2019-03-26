@@ -86,7 +86,63 @@ open SM
    Take an environment, a stack machine program, and returns a pair --- the updated environment and the list
    of x86 instructions
 *)
-let compile env code = failwith "Not yet implemented"
+let rec compile env program = List.fold_left compile1 (env, []) program
+  and compile1 (env, prg) ins =
+  let ref_global e x = let e' = e#global x in M (e'#loc x), e' in
+  let newenv, newprg = match ins with
+    | CONST n ->
+      let loc, env = env#allocate in
+      env, [Mov (L n, loc)]
+    | WRITE ->
+      let loc, env = env#pop in
+      env, [Push loc; Call "Lwrite"; Pop eax]
+    | READ ->
+      let loc, env = env#allocate in
+      env, [Call "Lread"; Mov(eax, loc)]
+    | LD x ->
+      let ref, env = ref_global env x in
+      let loc, env = env#allocate in
+      env, [Mov (ref, loc)]
+    | ST x ->
+      let ref, env = ref_global env x in
+      let loc, env = env#pop in
+      env, [Mov (loc, ref)]
+    | BINOP op -> 
+      let op2, op1, env = env#pop2 in
+      let result, env = env#allocate in
+      let simple_op cmd = match (op1, op2) with 
+        | (S _, S _) -> [Mov (op1, eax); Binop (cmd, op2, eax); Mov(eax, result)]
+        | _ -> if result = op1 then [Binop (cmd, op2, op1)] else [Binop (cmd, op2, op1); Mov (op1, result)] 
+      in
+      let div_op cmd = let reg = if cmd = "/" then eax else edx in
+       [Mov(op1, eax); Binop("^", edx, edx); Cltd; IDiv op2; Mov(reg, result)] 
+      in
+      let cmp_op cmd = let suffix = match cmd with 
+        | ">" -> "g"
+        | ">=" -> "ge"
+        | "<" -> "l"
+        | "<=" -> "le"
+        | "==" -> "e"
+        | "!=" -> "ne"
+        | _ -> failwith "Unknown comparison operator"
+      in match (op1, op2) with 
+        | (S _, S _) -> [Binop("^", eax, eax); Mov (op1, edx); Binop ("cmp", op2, edx); Set(suffix, "%al"); Mov(eax, result)]
+        | _ -> [Binop("^", eax, eax); Binop ("cmp", op2, op1); Set(suffix, "%al"); Mov(eax, result)]
+      in
+      let insn = match op with 
+        | "+" | "-" | "*" -> simple_op op
+        | "/" | "%" -> div_op op
+        | ">" | ">=" | "<" | "<=" | "==" | "!=" -> cmp_op op
+        | "!!" -> [Binop("^", eax, eax); Mov (op1, edx); Binop ("!!", op2, edx); Set("nz", "%al"); Mov(eax, result)]
+        (* imul does not set ZF :( *)
+        | "&&" -> [
+          Binop("^", eax, eax); Binop("^", edx, edx); 
+          Binop("cmp", L 0, op1); Set("ne", "%al"); 
+          Binop("cmp", L 0, op2); Set("ne", "%dl");
+          Binop("&&", edx, eax); Mov(eax, result)]
+        | _ -> failwith ("Unknown operator " ^ op)
+      in env, insn
+  in (newenv, prg @ newprg)
 
 (* A set of strings *)           
 module S = Set.Make (String)

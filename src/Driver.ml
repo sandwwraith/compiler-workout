@@ -43,6 +43,6 @@ let main =
 	  else SM.run (SM.compile prog) input
 	in
 	List.iter (fun i -> Printf.printf "%d\n" i) output
-    | `Fail er -> Printf.eprintf "Syntax error: %s\n" er
+    | `Fail er -> Printf.printf "Syntax error: %s" er
   with Invalid_argument _ ->
     Printf.printf "Usage: rc [-i | -s] <input file.expr>\n"
