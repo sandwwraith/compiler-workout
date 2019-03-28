@@ -1,0 +1,6 @@
+FLG -rectypes
+FLG -ppx camlp5o
+S src
+B src
+PKG GT
+PKG ostap

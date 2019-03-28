@@ -90,6 +90,11 @@ let rec compile env program = List.fold_left compile1 (env, []) program
   and compile1 (env, prg) ins =
   let ref_global e x = let e' = e#global x in M (e'#loc x), e' in
   let newenv, newprg = match ins with
+    | LABEL l -> env, [Label l]
+    | JMP l -> env, [Jmp l]
+    | CJMP (c, l) -> 
+      let loc, env = env#pop in
+      env, [Binop ("cmp", L 0, loc); CJmp (c, l)]
     | CONST n ->
       let loc, env = env#allocate in
       env, [Mov (L n, loc)]
@@ -102,11 +107,11 @@ let rec compile env program = List.fold_left compile1 (env, []) program
     | LD x ->
       let ref, env = ref_global env x in
       let loc, env = env#allocate in
-      env, [Mov (ref, loc)]
+      env, [Mov (ref, eax); Mov (eax, loc)]
     | ST x ->
       let ref, env = ref_global env x in
       let loc, env = env#pop in
-      env, [Mov (loc, ref)]
+      env, [Mov (loc, eax); Mov(eax, ref)]
     | BINOP op -> 
       let op2, op1, env = env#pop2 in
       let result, env = env#allocate in

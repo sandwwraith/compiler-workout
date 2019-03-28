@@ -113,7 +113,7 @@ module Stmt =
     (* empty statement                  *) | Skip
     (* conditional                      *) | If     of Expr.t * t * t
     (* loop with a pre-condition        *) | While  of Expr.t * t
-    (* loop with a post-condition       *) (* add yourself *)  with show
+    (* loop with a post-condition       *) | Repeat of t * Expr.t with show
                                                                     
     (* The type of configuration: a state, an input stream, an output stream *)
     type config = Expr.state * int list * int list 
@@ -135,6 +135,12 @@ module Stmt =
       | Write e -> (state, input, output@[(Expr.eval state e)])
       | Assign (name, e) -> (Expr.update name (Expr.eval state e) state, input, output)
       | Seq (one, two) -> eval (eval config one) two
+      | Skip -> (state, input, output)
+      | If (cond, zen, elze) -> let res = (Expr.eval state cond) in if (res != 0) then eval config zen  else eval config elze
+      | While (cond, action) -> let res = (Expr.eval state cond) in 
+        if (res == 0) then config else eval (eval config action) (statement)
+      | Repeat (action, cond) -> let first = eval config action in 
+        let (conf', _, _) = first in if (Expr.eval conf' cond  != 0) then first else eval first statement
                                
     (* Statement parser *)
     ostap (
@@ -142,6 +148,17 @@ module Stmt =
         "read" "(" x:IDENT ")"           {Read x}
         | "write" "(" e:!(Expr.expr) ")" {Write e}
         | x:IDENT ":=" e:!(Expr.expr)    {Assign (x, e)}
+        | "skip" {Skip}
+        | "if" e:!(Expr.expr) "then" s1:parse s2:elif {If (e, s1, s2)}
+        | "while" e:!(Expr.expr) "do" s:parse "od" {While (e, s)}
+        | "repeat" s:parse "until" e:!(Expr.expr) {Repeat (s, e)}
+        | "for" i:parse "," e:!(Expr.expr) "," inc:parse "do" s:parse "od" {Seq (i, While (e, Seq(s, inc)))}
+        ;
+      
+      elif:
+        "fi" { Skip }
+        | "else" s:parse "fi" { s }
+        | "elif" e:!(Expr.expr) "then" s1:parse s2:elif { If (e, s1, s2) }
         ;
 
       parse: <s::ss> : !(Util.listBy)[ostap (";")][statement] { List.fold_left (fun s ss -> Seq(s, ss)) s ss }
